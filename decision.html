@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dynamic Weighted Roulette</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin-top: 40px;
+    }
+    #wheel {
+      border: 5px solid black;
+      border-radius: 50%;
+      margin: 20px auto;
+      display: block;
+    }
+    #spinButton {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+    #result {
+      margin-top: 20px;
+      font-size: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Dynamic Weighted Roulette</h1>
+  <canvas id="wheel" width="400" height="400"></canvas>
+  <br>
+  <button id="spinButton">Spin the Wheel</button>
+  <div id="result"></div>
+
+  <script>
+    const canvas = document.getElementById('wheel');
+    const ctx = canvas.getContext('2d');
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = canvas.width / 2;
+
+    // Prompt user for the number of slices (segments).
+    let numSlices = parseInt(prompt("How many slices do you want on the wheel?"), 10);
+    // Validate input
+    if (isNaN(numSlices) || numSlices < 1) {
+      alert("Invalid number. Using 1 slice by default.");
+      numSlices = 1;
+    }
+
+    // This array will hold objects of the form:
+    // { label: string, weight: number, color: string }
+    const slices = [];
+
+    // Simple array of random colors to pick from
+    const colorPalette = [
+      "red", "green", "blue", "yellow", "purple", "black",
+      "orange", "pink", "gray", "teal", "cyan", "lime"
+    ];
+
+    // Function to get a random color
+    function getRandomColor() {
+      return colorPalette[Math.floor(Math.random() * colorPalette.length)];
+    }
+
+    // Collect slice data from the user
+    for (let i = 0; i < numSlices; i++) {
+      let text = prompt(`Enter text for slice #${i + 1}:`);
+      if (!text) {
+        text = `Slice ${i + 1}`; // default text if user cancels
+      }
+
+      // If the text is "shiv" (case-insensitive), weight=2, else weight=1
+      let weight = (text.toLowerCase() === "shiv") ? 2 : 1;
+
+      slices.push({
+        label: text,
+        weight: weight,
+        color: getRandomColor()
+      });
+    }
+
+    // Calculate the total weight to help with weighted random selection
+    let totalWeight = slices.reduce((acc, slice) => acc + slice.weight, 0);
+
+    // Draw the wheel with a given rotation (in radians)
+    function drawWheel(rotation = 0) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const anglePerSlice = (2 * Math.PI) / numSlices;
+
+      for (let i = 0; i < numSlices; i++) {
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(
+          centerX,
+          centerY,
+          radius,
+          i * anglePerSlice + rotation,
+          (i + 1) * anglePerSlice + rotation
+        );
+        ctx.closePath();
+        ctx.fillStyle = slices[i].color;
+        ctx.fill();
+
+        // Draw text (optional)
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(i * anglePerSlice + rotation + anglePerSlice / 2);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#fff";
+        ctx.font = "16px Arial";
+        ctx.fillText(slices[i].label, radius - 10, 5);
+        ctx.restore();
+      }
+    }
+
+    drawWheel(0); // Initial draw
+
+    let spinning = false;
+
+    // Weighted random selection
+    // Picks an index based on each slice's weight
+    function pickWeightedIndex() {
+      let r = Math.random() * totalWeight;
+      for (let i = 0; i < slices.length; i++) {
+        if (r < slices[i].weight) {
+          return i;
+        }
+        r -= slices[i].weight;
+      }
+      return slices.length - 1; // fallback
+    }
+
+    function spinWheel() {
+      if (spinning) return;
+      spinning = true;
+      document.getElementById('spinButton').disabled = true;
+      document.getElementById('result').textContent = "";
+
+      // Determine the winning index using weighted random
+      const winningIndex = pickWeightedIndex();
+
+      // Each slice covers anglePerSlice radians
+      const anglePerSlice = (2 * Math.PI) / numSlices;
+      // The center of the winning slice
+      const winningCenter = winningIndex * anglePerSlice + anglePerSlice / 2;
+
+      // We want the winning slice to align with 0 radians (the "top")
+      // finalRotation mod 2π = 2π - winningCenter
+      const extraRotations = 5 * 2 * Math.PI; // spin 5 full turns
+      const finalRotation = extraRotations + (2 * Math.PI - winningCenter);
+
+      const duration = 3000; // spin duration in ms
+      let start = null;
+      const initialRotation = 0;
+
+      function easeOutCubic(t) {
+        return 1 - Math.pow(1 - t, 3);
+      }
+
+      function animate(timestamp) {
+        if (!start) start = timestamp;
+        let elapsed = timestamp - start;
+        if (elapsed > duration) elapsed = duration;
+
+        let progress = elapsed / duration;
+        let easedProgress = easeOutCubic(progress);
+        let currentRotation = initialRotation + easedProgress * (finalRotation - initialRotation);
+
+        drawWheel(currentRotation);
+
+        if (elapsed < duration) {
+          requestAnimationFrame(animate);
+        } else {
+          spinning = false;
+          document.getElementById('spinButton').disabled = false;
+          const winner = slices[winningIndex];
+          document.getElementById('result').textContent = `Result: ${winner.label}`;
+        }
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    document.getElementById('spinButton').addEventListener('click', spinWheel);
+  </script>
+</body>
+</html>
